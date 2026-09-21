@@ -1,0 +1,9 @@
+targetNamespace: ''
+packages:
+  - name: battlesnake
+    functions:
+      - name: api
+        runtime: 'python:default'
+        web: raw          # raw HTTP so we can route on method + path
+        limits:
+          timeout: 5000   # ms
