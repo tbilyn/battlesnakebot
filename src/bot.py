@@ -19,6 +19,7 @@ class NextMoveStatus:
         self.kill_possibility = False
         self.space = 0
         self.food_distance: int | None = None
+        self.longest_path: int = 0
 
     def get_space_category(self, length: int) -> int:
         if self.space < length * 0.8:
@@ -47,8 +48,12 @@ class SnakeObject:
         self.length = input["length"]
 
         self.head = Point(input["head"]["x"], input["head"]["y"])
-        self.body = {Point(f["x"], f["y"]) for f in input["body"]}
+        self.body = [Point(f["x"], f["y"]) for f in input["body"]]
         self.neck = Point(input["body"][1]["x"], input["body"][1]["y"])
+
+        self.double_tail = False
+        if len(self.body) > 1 and self.body[-1] == self.body[-2]:
+            self.double_tail = True
 
 
 class BoardObject:
@@ -61,9 +66,15 @@ class BoardObject:
 
         self.obstacles: set[Point] = set()
         for sn in self.snakes:
-            self.obstacles.update(sn.body)
+            # we get body without last item because it is:
+            # - either tail that will be emptry the next turn
+            # or it is double tail, and so two last items are the same and we can use just one
+            self.obstacles.update(sn.body[:-1])
 
-    def bfs(self, start: Point, max_visited: int = 10000) -> tuple[int, int | None]:
+    def bfs(
+        self, start: Point, max_visited: int = 10000
+    ) -> tuple[int, int | None, int]:
+        """it returns: (visited cell amount, the closest food distance, the longest path)"""
 
         class CellDescr(NamedTuple):
             distance: int
@@ -88,13 +99,14 @@ class BoardObject:
             visited[cell] = CellDescr(pos, is_food)
 
         if len(visited) == 0:
-            return (0, None)
+            return (0, None, 0)
 
         food: list[int] = [elem.distance for elem in visited.values() if elem.is_food]
-
         closest_food: int | None = min(food, default=None)
 
-        return len(visited), closest_food
+        longest_path: int = max(visited.values(), key=lambda e: e.distance).distance
+
+        return len(visited), closest_food, longest_path
 
     def onboard(self, p: Point) -> bool:
         if p.x < 0 or p.x >= self.width:
@@ -181,9 +193,10 @@ def move_fn(board: BoardObject, me: SnakeObject):
     for move in available_moves:
         if move.deadend == True:
             continue
-        space, closest_food = board.bfs(move.point)  # , me.length * 2
+        space, closest_food, longest_path = board.bfs(move.point)  # , me.length * 2
         move.space = space
         move.food_distance = closest_food
+        move.longest_path = longest_path
 
     safe_moves: list[NextMoveStatus] = [
         move for move in available_moves if move.deadend == False and move.risk == False
@@ -191,7 +204,7 @@ def move_fn(board: BoardObject, me: SnakeObject):
 
     need_food: bool = False
 
-    if me.health < 50:
+    if me.health < 55:
         need_food = True
     else:
         for s in board.snakes:
@@ -220,11 +233,11 @@ def move_fn(board: BoardObject, me: SnakeObject):
 
     ordered_moves = sorted(
         available_moves,
-        key=lambda e: e.space,
+        key=lambda e: e.longest_path,
         reverse=True,
     )
 
-    # todo: remember about tail, it will move the next turn
+    # todo:
     # remember to not go for foor that enemy can reach first
     # if just two left - try to attack
     # todo: if you see that space is constrained - follow the longest available path
