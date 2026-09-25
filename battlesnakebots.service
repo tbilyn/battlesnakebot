@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/apps/battlesnakebots
+WorkingDirectory=/apps/battlesnakebots/src
 Environment="PATH=/apps/battlesnakebots/.venv/bin"
 ExecStart=/apps/battlesnakebots/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips="127.0.0.1"
 Restart=always
