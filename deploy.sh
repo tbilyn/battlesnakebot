@@ -9,7 +9,7 @@ cd /apps/battlesnakebots
 
 # Sync Python deps into the venv (installs new/updated, no-op if unchanged).
 # Runs before the chmod so freshly installed files are made app-readable too.
-venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements.txt
 
 # Ensure www-data (the app user) can read everything root just pulled,
 # regardless of root's umask. Capital X = traverse dirs / keep executables,
