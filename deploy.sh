@@ -11,6 +11,11 @@ cd /apps/battlesnakebots
 # Runs before the chmod so freshly installed files are made app-readable too.
 .venv/bin/pip install -r requirements.txt
 
+# Pre-compile bytecode as root so www-data doesn't recompile on every start
+# (it can't write .pyc into the root-owned tree). Runs before the chmod so the
+# generated __pycache__ files get made app-readable too.
+.venv/bin/python -m compileall -q .
+
 # Ensure www-data (the app user) can read everything root just pulled,
 # regardless of root's umask. Capital X = traverse dirs / keep executables,
 # without marking plain files executable. Ownership stays root (read-only to app).
