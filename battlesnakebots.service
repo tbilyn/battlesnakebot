@@ -1,5 +1,5 @@
 [Unit]
-Description=BattleSnake bot
+Description=BattleSnake bots
 After=network.target
 
 [Service]
@@ -10,8 +10,8 @@ Environment="PATH=/apps/battlesnakebots/.venv/bin"
 ExecStart=/apps/battlesnakebots/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers --forwarded-allow-ips="127.0.0.1"
 Restart=always
 RestartSec=3
-StateDirectory=battlesnakebot
-Environment="HOME=/var/lib/battlesnakebot"
+StateDirectory=battlesnakebots
+Environment="HOME=/var/lib/battlesnakebots"
 ExecReload=/bin/kill -s HUP $MAINPID
 
 [Install]

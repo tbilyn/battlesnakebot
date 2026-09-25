@@ -25,8 +25,8 @@ nginx -t
 systemctl reload nginx
 
 # Restart the app to pick up code / unit changes.
-systemctl restart battlesnakebot
+systemctl restart battlesnakebots
 
 # Show the result.
-systemctl --no-pager --lines=0 status battlesnakebot
+systemctl --no-pager --lines=0 status battlesnakebots
 echo "Deploy complete."
