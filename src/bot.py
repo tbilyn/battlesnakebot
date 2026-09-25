@@ -9,16 +9,26 @@ class Point(NamedTuple):
 
 
 class NextMoveStatus:
-    def __init__(self, move: str, deadend: bool = False, risk: bool = False):
-        self.move = move
+    def __init__(
+        self, point: Point, direction: str, deadend: bool = False, risk: bool = False
+    ):
+        self.point = point
+        self.direction = direction
         self.deadend = deadend
         self.risk = risk
         self.kill_possibility = False
         self.space = 0
-        self.food_distance = 0
+        self.food_distance: int | None = None
+
+    def get_space_category(self, length: int) -> int:
+        if self.space < length * 0.8:
+            return 0
+        if self.space >= length * 0.8 and self.space < length * 1.4:
+            return 1
+        return 2
 
     def __str__(self) -> str:
-        return f"({self.move.upper()} deadend: {self.deadend}, risk: {self.risk}, space: {self.space})"
+        return f"({self.direction.upper()} deadend: {self.deadend}, risk: {self.risk}, space: {self.space})"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -53,20 +63,38 @@ class BoardObject:
         for sn in self.snakes:
             self.obstacles.update(sn.body)
 
-    def bfs(self, start: Point, max_visited: int = 10000) -> int:
+    def bfs(self, start: Point, max_visited: int = 10000) -> tuple[int, int | None]:
+
+        class CellDescr(NamedTuple):
+            distance: int
+            is_food: bool
+
+        visited: dict[Point, CellDescr] = {}
+
         queue: deque = deque()
-        queue.append(start)
-        visited: set[Point] = set()
+        queue.append((start, 0))
+
         while len(queue) > 0 and len(visited) < max_visited:
-            cell = queue.popleft()
+            cell, pos = queue.popleft()
             if cell in visited:
                 continue
+
+            is_food = cell in self.food
+
             ns = self.neighbours(cell)
-            ns_empty = [n for n in ns if n not in self.obstacles]
-            # print(ns_empty)
+            ns_empty = [(n, pos + 1) for n in ns if n not in self.obstacles]
+
             queue.extend(ns_empty)
-            visited.add(cell)
-        return len(visited)
+            visited[cell] = CellDescr(pos, is_food)
+
+        if len(visited) == 0:
+            return (0, None)
+
+        food: list[int] = [elem.distance for elem in visited.values() if elem.is_food]
+
+        closest_food: int | None = min(food, default=None)
+
+        return len(visited), closest_food
 
     def onboard(self, p: Point) -> bool:
         if p.x < 0 or p.x >= self.width:
@@ -75,28 +103,28 @@ class BoardObject:
             return False
         return True
 
-    def next_moves(self, snake: SnakeObject) -> dict[Point, NextMoveStatus]:
-        res: dict[Point, NextMoveStatus] = {}
+    def next_moves(self, snake: SnakeObject) -> set[NextMoveStatus]:
+        res: set[NextMoveStatus] = set()
 
         p = Point(snake.head.x - 1, snake.head.y)
         if self.onboard(p):
-            state = NextMoveStatus("left")
-            res[p] = state
+            state = NextMoveStatus(p, "left")
+            res.add(state)
 
         p = Point(snake.head.x + 1, snake.head.y)
         if self.onboard(p):
-            state = NextMoveStatus("right")
-            res[p] = state
+            state = NextMoveStatus(p, "right")
+            res.add(state)
 
         p = Point(snake.head.x, snake.head.y + 1)
         if self.onboard(p):
-            state = NextMoveStatus("up")
-            res[p] = state
+            state = NextMoveStatus(p, "up")
+            res.add(state)
 
         p = Point(snake.head.x, snake.head.y - 1)
         if self.onboard(p):
-            state = NextMoveStatus("down")
-            res[p] = state
+            state = NextMoveStatus(p, "down")
+            res.add(state)
 
         return res
 
@@ -125,14 +153,13 @@ class BoardObject:
         return math.hypot(p2.x - p1.x, p2.y - p1.y)
 
 
-def move(board: BoardObject, me: SnakeObject):
-    # print("---")
-    # print(f"head: {me.head}")
+def move_fn(board: BoardObject, me: SnakeObject):
+
     available_moves = board.next_moves(me)
 
-    for point, state in available_moves.items():
-        if point in board.obstacles:
-            state.deadend = True
+    for move in available_moves:
+        if move.point in board.obstacles:
+            move.deadend = True
 
     # mark cells as risky if big oponents head can move into
     oponents_heads = {
@@ -144,62 +171,65 @@ def move(board: BoardObject, me: SnakeObject):
     risky: set[Point] = set()
     for h in oponents_heads:
         neighs = board.neighbours(h)
-        # print(f"   oponent head: {h}: {neighs}")
         risky.update(neighs)
 
-    for point, state in available_moves.items():
-        if point in risky:
-            state.risk = True
+    for move in available_moves:
+        if move.point in risky:
+            move.risk = True
 
     # calculate space available for each of the moves
-    for point in available_moves:
-        if available_moves[point].deadend == True:
+    for move in available_moves:
+        if move.deadend == True:
             continue
-        space = board.bfs(point)  # , me.length * 2
-        available_moves[point].space = space
-        # if space < me.length:
-        #     available_moves[point].deadend = True
+        space, closest_food = board.bfs(move.point)  # , me.length * 2
+        move.space = space
+        move.food_distance = closest_food
 
-    # print(available_moves)
+    safe_moves: list[NextMoveStatus] = [
+        move for move in available_moves if move.deadend == False and move.risk == False
+    ]
 
-    if False or me.health < 50 and len(board.food) > 0:
-        closest_food = next(iter(board.food))
-        min_dist = BoardObject.dist(me.head, closest_food)
-        for f in board.food:
-            dist = BoardObject.dist(me.head, f)
-            if dist < min_dist:
-                min_dist = dist
-                closest_food = f
+    need_food: bool = False
 
-        if closest_food.x < me.head.x:
-            next_move = "left"
-        if closest_food.x > me.head.x:
-            next_move = "right"
-        if closest_food.y < me.head.y:
-            next_move = "down"
-        if closest_food.y > me.head.y:
-            next_move = "up"
+    if me.health < 75:
+        need_food = True
+
+    # filter only those where food is, it which are safe and which have enough space to not die
+    if need_food:
+        food_moves = [
+            move
+            for move in safe_moves
+            if move.food_distance is not None
+            and move.get_space_category(me.length) >= 1
+        ]
+
+        if len(food_moves) > 0:
+            ordered_food = sorted(
+                food_moves,
+                key=lambda e: (
+                    e.food_distance if e.food_distance is not None else 100000
+                ),
+            )
+            return {"move": ordered_food[0].direction}
 
     ordered_moves = sorted(
-        [(k, v) for k, v in available_moves.items()],
-        key=lambda e: e[1].space,
+        available_moves,
+        key=lambda e: e.space,
         reverse=True,
     )
 
-    # print(ordered_moves)
+    # todo: remember about tail, it will move the next turn
+    # remember to not go for foor that enamy can reach first
+    # if just two left - try to attack
 
-    for p, s in ordered_moves:
-        if s.deadend == False and s.risk == False:
-            return {"move": s.move}
-    for p, s in ordered_moves:
-        if s.deadend == False and s.risk == True:
-            return {"move": s.move}
+    for move in ordered_moves:
+        if move.deadend == False and move.risk == False:
+            return {"move": move.direction}
+    for move in ordered_moves:
+        if move.deadend == False and move.risk == True:
+            return {"move": move.direction}
 
     return {"move": "up", "shout": "no moves"}
-
-
-
-
 
 
 if __name__ == "__main__":
@@ -240,3 +270,22 @@ if __name__ == "__main__":
     print("2,1: " + str(board.bfs(Point(2, 1), 5)))
     print("3,2: " + str(board.bfs(Point(3, 2), 5)))
     print("4,1: " + str(board.bfs(Point(4, 1), 5)))
+
+
+# if False or me.health < 50 and len(board.food) > 0:
+#     closest_food = next(iter(board.food))
+#     min_dist = BoardObject.dist(me.head, closest_food)
+#     for f in board.food:
+#         dist = BoardObject.dist(me.head, f)
+#         if dist < min_dist:
+#             min_dist = dist
+#             closest_food = f
+
+#     if closest_food.x < me.head.x:
+#         next_move = "left"
+#     if closest_food.x > me.head.x:
+#         next_move = "right"
+#     if closest_food.y < me.head.y:
+#         next_move = "down"
+#     if closest_food.y > me.head.y:
+#         next_move = "up"

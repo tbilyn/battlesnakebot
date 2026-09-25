@@ -5,7 +5,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from bot import BoardObject, SnakeObject, move
+from bot import BoardObject, SnakeObject, move_fn
 from oldbot import move as old_move
 
 
@@ -39,7 +39,7 @@ async def game_move(request: Request) -> JSONResponse:
     snake = SnakeObject(body["you"])
     board = BoardObject(body["board"])
 
-    res = move(board, snake)
+    res = move_fn(board, snake)
 
     end_time = time.perf_counter()
     elapsed_time_ms = (end_time - start_time) * 1000
