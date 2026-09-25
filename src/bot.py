@@ -191,8 +191,14 @@ def move_fn(board: BoardObject, me: SnakeObject):
 
     need_food: bool = False
 
-    if me.health < 75:
+    if me.health < 50:
         need_food = True
+    else:
+        for s in board.snakes:
+            if s.id == me.id:
+                continue
+            if s.length >= me.length:
+                need_food = True
 
     # filter only those where food is, it which are safe and which have enough space to not die
     if need_food:
@@ -219,8 +225,11 @@ def move_fn(board: BoardObject, me: SnakeObject):
     )
 
     # todo: remember about tail, it will move the next turn
-    # remember to not go for foor that enamy can reach first
+    # remember to not go for foor that enemy can reach first
     # if just two left - try to attack
+    # todo: if you see that space is constrained - follow the longest available path
+    # stay way from ends of the grid, move closer to the center
+    # follow your tail
 
     for move in ordered_moves:
         if move.deadend == False and move.risk == False:
